@@ -1,0 +1,106 @@
+#!/usr/bin/env python3
+
+import sys
+import click
+from click import option  # This line is optional if you've already imported 'click'
+
+@click.command(context_settings=dict(help_option_names=['-h', '--help']))
+@click.option('-e', '--encode', 'operation', flag_value='encode', help='Encode an IPv6 address to emoji.')
+@click.option('-d', '--decode', 'operation', flag_value='decode', help='Decode an emoji string to IPv6 address.')
+@click.option('-v', '--verbose', is_flag=True, help='Enable verbose output.')
+@click.argument('input_data', type=str, required=False)  # Make this argument optional
+def main(operation, input_data, verbose):
+    """
+    Convert IPv6 addresses to emojis and vice versa.
+    """
+    if input_data is None:
+        click.echo("No arguments provided.")
+        ctx = click.get_current_context()
+        click.echo(ctx.get_help())
+        ctx.exit()
+
+    if operation == 'encode':
+        result = ipv6_to_emoji(input_data, final_emoji_map_256)
+        if verbose:
+            print(f"The emoji representation of\n{input_data}\nis\n{result}")
+        else:
+            print(result)
+    elif operation == 'decode':
+        result = emoji_to_ipv6(input_data, final_emoji_map_256)
+        if verbose:
+            print(f"The restored IPv6 address from\n{input_data}\nis\n{result}")
+        else:
+            print(result)
+    else:
+        click.echo("Invalid operation. Use -e for encoding and -d for decoding.")
+        ctx = click.get_current_context()
+        click.echo(ctx.get_help())
+        ctx.exit()
+
+def decimal_to_emoji_pair(decimal_value, emoji_map):
+    first_emoji_index = decimal_value // len(emoji_map)
+    second_emoji_index = decimal_value % len(emoji_map)
+    return emoji_map[first_emoji_index] + emoji_map[second_emoji_index]
+
+def ipv6_to_emoji(ipv6_address, emoji_map):
+    hex_groups = ipv6_address.split(":")
+    emoji_address = ''.join(decimal_to_emoji_pair(int(group, 16), emoji_map) for group in hex_groups)
+    return optimize_emoji_string(emoji_address, sequential_emoji_map)
+
+def emoji_pair_to_decimal(emoji_pair, emoji_map):
+    first_emoji, second_emoji = emoji_pair
+    return emoji_map.index(first_emoji) * len(emoji_map) + emoji_map.index(second_emoji)
+
+def emoji_to_ipv6(emoji_address, emoji_map):
+    restored_emoji_address = restore_emoji_string(emoji_address, sequential_emoji_map)
+    emoji_pairs = [restored_emoji_address[i:i+2] for i in range(0, len(restored_emoji_address), 2)]
+    hex_groups = [hex(emoji_pair_to_decimal(pair, emoji_map))[2:].zfill(4).upper() for pair in emoji_pairs]
+    return ":".join(hex_groups)
+
+def optimize_emoji_string(emoji_str, sequential_emoji_map):
+    optimized_str = []
+    prev_emoji = ''
+    count = 1
+    for emoji in emoji_str:
+        if emoji == prev_emoji:
+            count += 1
+        else:
+            if count > 1:
+                optimized_str.append(sequential_emoji_map[count - 2])
+            optimized_str.append(prev_emoji)
+            prev_emoji = emoji
+            count = 1
+    if count > 1:
+        optimized_str.append(sequential_emoji_map[count - 2])
+    optimized_str.append(prev_emoji)
+    return ''.join(optimized_str)
+
+def restore_emoji_string(optimized_str, sequential_emoji_map):
+    restored_str = []
+    skip_next = False
+    for i, emoji in enumerate(optimized_str):
+        if skip_next:
+            skip_next = False
+            continue
+        if emoji in sequential_emoji_map:
+            repeat_count = sequential_emoji_map.index(emoji) + 2
+            restored_str.append(optimized_str[i + 1] * repeat_count)
+            skip_next = True
+        else:
+            restored_str.append(emoji)
+    return ''.join(restored_str)
+
+final_emoji_map_256 = (
+    '😀😁😂🤣😃😄😅😆😇😈😉😊😋😌😍😎😏😐😑😒😓😔😕😖😗😘😙😚😛😜😝😞'
+    '👦👧👨👩👴👵👶👱👲👳👮👯👰👱👲👳👴👵👶👷👸👹👺👻👼👽👾👿💀💁💂'
+    '🐶🐱🐭🐹🐰🦊🐻🐼🐨🐯🦁🐮🐷🐽🐸🐵🙈🙉🙊🐒🐔🐧🐦🐤🐣🐥🦆🦅🦉🦇🐺🐗'
+    '🍏🍎🍐🍊🍋🍌🍉🍇🍓🍈🍒🍑🍍🥝🥑🍅🍆🥒🥕🌽🌶🥔🍠🌰🥜🍯🥐🍞🥖🧀🍖🍗'
+    '⚽⚾🏀🏐🏈🏉🎾🎱🎳🏏🏑🏒🏓🏸🥅🏹🎣🥊🥋🎽🛷🥌🎯🎮🎲🎷🎸🎹🎺🎻🥁🎼'
+    '🚗🚕🚙🚌🚎🏎🚓🚑🚒🚐🚚🚛🚜🛴🚲🛵🏍🚨🚔🚍🚘🚖🚡🚠🚟🚃🚋🚞🚝🚄🚅🚈'
+    '⌚⏰⏱⏲🕰💡🔦🏮📔📕📖📗📘📙📚📓📒📃📜📄📰🗞📑🔖🏷💰💴💵💶💷💸💳'
+    '❤️🧡💛💚💙💜🖤💔❣️💕💞💓💗💖💘💝💟☮️🔴🟠🟡🟢🔵🟣🟤'
+)
+sequential_emoji_map = '🚹🚺🚻🚼🚽🚾🚿🛀🛁🛂🛃🛄🛅⚠️🚸'
+
+if __name__ == '__main__':
+    main()
