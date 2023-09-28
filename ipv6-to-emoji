@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
 
-import sys
 import click
-from click import option  # This line is optional if you've already imported 'click'
 
 @click.command(context_settings=dict(help_option_names=['-h', '--help']))
 @click.option('-e', '--encode', 'operation', flag_value='encode', help='Encode an IPv6 address to emoji.')
 @click.option('-d', '--decode', 'operation', flag_value='decode', help='Decode an emoji string to IPv6 address.')
-@click.option('-v', '--verbose', is_flag=True, help='Enable verbose output.')
-@click.argument('input_data', type=str, required=False)  # Make this argument optional
+@click.option('-v', '--verbose', is_flag=True, help='Display detailed output.')
+@click.argument('input_data', type=str, required=False)
 def main(operation, input_data, verbose):
     """
     Convert IPv6 addresses to emojis and vice versa.
@@ -20,22 +18,58 @@ def main(operation, input_data, verbose):
         ctx.exit()
 
     if operation == 'encode':
-        result = ipv6_to_emoji(input_data, final_emoji_map_256)
         if verbose:
-            print(f"The emoji representation of\n{input_data}\nis\n{result}")
+            print(f"The emoji representation of {input_data} is\n{ipv6_to_emoji(input_data, final_emoji_map_256)}")
         else:
-            print(result)
+            print(ipv6_to_emoji(input_data, final_emoji_map_256))
+
     elif operation == 'decode':
-        result = emoji_to_ipv6(input_data, final_emoji_map_256)
+        uncompressed_ipv6 = emoji_to_ipv6(input_data, final_emoji_map_256)
         if verbose:
-            print(f"The restored IPv6 address from\n{input_data}\nis\n{result}")
+            print(f"The restored IPv6 address from {input_data} is\n{uncompressed_ipv6}")
         else:
-            print(result)
+            compressed_ipv6 = compress_ipv6_address(uncompressed_ipv6)
+            print(compressed_ipv6)
+
+def expand_ipv6_address(ipv6_address):
+    double_colon_parts = ipv6_address.split('::')
+    if len(double_colon_parts) > 2:
+        raise ValueError("Invalid IPv6 address: More than one '::' found.")
+    before_double_colon = double_colon_parts[0].split(':')
+    after_double_colon = double_colon_parts[-1].split(':')
+    zero_blocks_needed = 8 - len(before_double_colon) - len(after_double_colon)
+    if len(double_colon_parts) == 2:
+        zero_blocks = ['0000'] * zero_blocks_needed
     else:
-        click.echo("Invalid operation. Use -e for encoding and -d for decoding.")
-        ctx = click.get_current_context()
-        click.echo(ctx.get_help())
-        ctx.exit()
+        zero_blocks = []
+    before_double_colon = [block.zfill(4) for block in before_double_colon]
+    after_double_colon = [block.zfill(4) for block in after_double_colon]
+    expanded_address = ':'.join(before_double_colon + zero_blocks + after_double_colon)
+    return expanded_address
+
+def compress_ipv6_address(ipv6_address):
+    max_zeros = ''
+    max_len = 0
+    cur_zeros = ''
+    cur_len = 0
+    for part in ipv6_address.split(':'):
+        if part == '0000':
+            cur_zeros += ':0000'
+            cur_len += 1
+        else:
+            if cur_len > max_len:
+                max_zeros = cur_zeros
+                max_len = cur_len
+            cur_zeros = ''
+            cur_len = 0
+
+    if cur_len > max_len:
+        max_zeros = cur_zeros
+
+    if max_zeros:
+        ipv6_address = ipv6_address.replace(max_zeros, ":", 1)
+
+    return ipv6_address.lstrip(':').rstrip(':')
 
 def decimal_to_emoji_pair(decimal_value, emoji_map):
     first_emoji_index = decimal_value // len(emoji_map)
